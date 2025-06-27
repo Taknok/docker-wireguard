@@ -136,27 +136,42 @@ ORIG_PERSISTENTKEEPALIVE_PEERS="$PERSISTENTKEEPALIVE_PEERS"
 DUDE
 }
 
-if [[ -n "$PEERS" ]]; then
-    echo "**** Server mode is selected ****"
+handle_peers_array () {
     if [[ "$PEERS" =~ ^[0-9]+$ ]] && ! [[ "$PEERS" = *,* ]]; then
         mapfile -t PEERS_ARRAY < <(seq 1 "${PEERS}")
     else
         mapfile -t PEERS_ARRAY < <(echo "${PEERS}" | tr ',' '\n')
     fi
+}
+
+handle_keepalive_peers () {
     if [[ -n "${PERSISTENTKEEPALIVE_PEERS}" ]]; then
         echo "**** PersistentKeepalive will be set for: ${PERSISTENTKEEPALIVE_PEERS/,/ } ****"
         mapfile -t PERSISTENTKEEPALIVE_PEERS_ARRAY < <(echo "${PERSISTENTKEEPALIVE_PEERS}" | tr ',' '\n')
     fi
+}
+
+handle_server_url () {
     if [[ -z "$SERVERURL" ]] || [[ "$SERVERURL" = "auto" ]]; then
         SERVERURL=$(curl -s icanhazip.com)
         echo "**** SERVERURL var is either not set or is set to \"auto\", setting external IP to auto detected value of $SERVERURL ****"
     else
         echo "**** External server address is set to $SERVERURL ****"
     fi
+}
+
+server_mode () {
+    echo "**** Server mode is selected ****"
+    handle_peers_array
+    handle_keepalive_peers
+    handle_server_url
+
     SERVERPORT=${SERVERPORT:-51820}
     echo "**** External server port is set to ${SERVERPORT}. Make sure that port is properly forwarded to port 51820 inside this container ****"
+
     INTERNAL_SUBNET=${INTERNAL_SUBNET:-10.13.13.0}
     echo "**** Internal subnet is set to $INTERNAL_SUBNET ****"
+
     INTERFACE=$(echo "$INTERNAL_SUBNET" | awk 'BEGIN{FS=OFS="."} NF--')
     ALLOWEDIPS=${ALLOWEDIPS:-0.0.0.0/0, ::/0}
     echo "**** AllowedIPs for peers $ALLOWEDIPS ****"
@@ -170,6 +185,7 @@ if [[ -n "$PEERS" ]]; then
         echo "**** No wg0.conf found (maybe an initial install), generating 1 server and ${PEERS} peer/client confs ****"
         generate_confs
         save_vars
+    
     else
         echo "**** Server mode is selected ****"
         if [[ -f /config/.donoteditthisfile ]]; then
@@ -183,6 +199,10 @@ if [[ -n "$PEERS" ]]; then
             echo "**** No changes to parameters. Existing configs are used. ****"
         fi
     fi
+}
+
+if [[ -n "$PEERS" ]]; then
+    server_mode
 else
     echo "**** Client mode selected. ****"
     USE_COREDNS="${USE_COREDNS,,}"
